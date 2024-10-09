@@ -1,0 +1,130 @@
+:root { /* stolen from gitea */
+    --bg-color: rgb(32, 36, 48);
+    --lighter-bg: rgb(48, 51, 64);
+    --top-bar: rgb(35, 40, 52);
+    --reg-text: rgb(203, 208, 218);
+    --links: rgb(135, 171, 99);
+    --border-color: rgb(82, 87, 103);
+    --fonts-regular: -apple-system, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla"
+}
+
+div#navbar {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+
+    background-color: var(--top-bar);
+    border-style: solid;
+    border-width: 0px 0px 0.9px 0px;
+    border-bottom-color: var(--border-color);
+
+    gap: 0.5em;
+    padding-left: 0.5em;
+}
+
+div#container {
+    display: flex;
+    flex-direction: column;
+    margin-left: 0.5em;
+    margin-right: 0.5em;
+    margin-bottom: 0.5em;
+
+    padding: 0.25em;
+    gap: 0.5em;
+}
+
+img {
+    height: 3em;
+}
+
+.navelem {
+    margin: 0.4em;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--reg-text);
+    font-family: var(--fonts-regular);
+
+    margin: 0px;
+
+    display: flex;
+    flex-direction: column;
+}
+
+a {
+    color: var(--links);
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline dotted;
+}
+
+.repodisplay {
+    display: flex;
+    flex-direction: row;
+
+    background-color: var(--lighter-bg);
+    padding: 0.5em;
+
+    border: 0.9px;
+    border-style: solid;
+    border-radius: 5px;
+    border-color: var(--border-color);
+
+    gap: 2px;
+}
+
+div.navelem {
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+    border-radius: 5px;
+}
+
+div.navelem > a {
+    color: var(--reg-text);
+}
+
+div.navelem > a:hover {
+    text-decoration: none;
+}
+
+div.navelem:hover {
+    color: var(--reg-text);
+    background-color: rgba(255, 255, 255, 0.55);
+}
+
+#title {
+    font-size: 4em;
+    font-weight: 400;
+    text-align: center;
+}
+
+#small {
+    vertical-align: top;
+}
+
+#titlespan {
+    width: 100%;
+    padding-top: 0.5em;
+}
+
+.reponame {
+    font-size: 2em;
+}
+
+.mainrepoinfo {
+    display: flex;
+    flex-direction: column;
+}
+
+.repostatusarea {
+    margin-left: auto;
+
+    display: flex;
+    flex-direction: column;
+}

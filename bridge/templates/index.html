@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div id="titlespan">
+    <span id="title">bridge</span> <span id="small"><a href="https://git.beepboop.systems/stupidcomputer/gitea-github-sync"><i>[what is this?]</i></a></span>
+</div>
+
+{% for repo in repos %}
+
+<div class="repodisplay">
+    <div class="mainrepoinfo">
+        <a href="{{ repo.url }}"><span class="reponame">{{ repo.name }}</span></a>
+
+        <span class="repodescription"><i>{{ repo.desc }}</i></span>
+    </div>
+    <div class="repostatusarea">
+        <span class="repostatus">active</span>
+
+        <a href="/bridge/{{ repo.name }}">[status]</a>
+    </div>
+</div>
+
+{% endfor %}
+
+{% endblock %}

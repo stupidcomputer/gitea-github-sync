@@ -1,19 +1,34 @@
-from flask import Flask
-from flask import request
-from flask import redirect
-from flask import abort
-
+from flask import Flask, request, redirect, abort, render_template
 import requests
 
 from .webgit import Gitea, Github
 from .utils import issue_sentinel, generate_sentinel, create_signature
 
-app = Flask(__name__)
+app = Flask(
+    __name__,
+    static_url_path="/bridge/static",
+    static_folder="./static"
+)
 app.config.from_envvar('GIT_BRIDGE_SETTINGS')
 
 @app.route("/bridge")
 def index():
-    return "you've reached the main page for an internal service. congrats!"
+    gitea = Gitea(
+        api_token=app.config["GITEA_ACCESS_TOKEN"],
+        instance_name=app.config["GITEA_INSTANCE_DOMAIN"],
+    )
+
+    repos = gitea.get_user_repos().json()
+    output = []
+    for repo in repos:
+        if not repo["private"]:
+            output.append({
+                "name": repo["name"],
+                "desc": repo["description"],
+                "url": repo["html_url"],
+            })
+
+    return render_template("index.html", repos=output)
 
 @app.route("/bridge/endpoints/gitea/repo", methods=["POST"])
 def gitea_handle_repo_action():

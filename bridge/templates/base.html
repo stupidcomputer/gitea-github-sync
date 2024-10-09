@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>gitweb bridge</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" /> 
+        <meta charset="UTF-8" />
+        <link rel="stylesheet" href="{{ url_for('static', filename='main.css') }}">
+    </head>
+    <body>
+        <div id="navbar">
+            <div class="navelem">
+                <a href="/bridge">
+                    <img src="{{ url_for('static', filename='logo.svg') }}" />
+                </a>
+            </div>
+            <div class="navelem">
+                <a href="/">Back to Gitea</a>
+            </div>
+        </div>
+        <div id="container">
+            {% block content %}{% endblock %}
+        </div>
+    </body>
+</html>

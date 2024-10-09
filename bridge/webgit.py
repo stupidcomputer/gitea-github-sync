@@ -36,6 +36,8 @@ class WebgitClient:
         self._post_request(r)
         return r
 
+    def get(self, *args, **kwargs):
+        return self._request_wrapper("GET", *args, **kwargs)
 
     def post(self, *args, **kwargs):
         return self._request_wrapper("POST", *args, **kwargs)
@@ -191,4 +193,9 @@ class Gitea(WebgitClient):
                 "events": events,
                 "type": "gitea",
             },
+        )
+
+    def get_user_repos(self):
+        return self.get(
+            self.api_prefix + "/user/repos"
         )
