@@ -6,7 +6,7 @@ from flask import abort
 import requests
 
 from .webgit import Gitea, Github
-from .utils import issue_sentinel, generate_sentinel
+from .utils import issue_sentinel, generate_sentinel, create_signature
 
 app = Flask(__name__)
 app.config.from_envvar('GIT_BRIDGE_SETTINGS')
@@ -143,22 +143,14 @@ def gitea_handle_issue_action():
         return ''
 
     if event_type == "opened":
-        issue_header = "*This issue has automatically been created by [`gitea-github-sync`](https://{}/bridge/about) on behalf of [{}]({}).*".format(
-            app.config["GITEA_INSTANCE_DOMAIN"],
+        issue_footer = create_signature(
             issue_user,
             issue_user_url,
+            app.config["GITEA_INSTANCE_DOMAIN"],
+            event_url,
         )
 
-        issue_footer = """
-<details>
-    <summary>Internal issue metadata</summary>
-
-    {}
-</details>
-        """.format(generate_sentinel(event_url))
-
         issue_body = "\n\n".join([
-            issue_header,
             event_body,
             issue_footer
         ])
@@ -169,25 +161,20 @@ def gitea_handle_issue_action():
             event_title,
             issue_body,
         )
+
         returned_data = new_issue.json()
-        issue_comment_body = """
-*This issue is being mirrored on Github [here]({}).*
-
-<details>
-    <summary>Internal issue metadata</summary>
-
-    {}
-</details>
-        """.format(
+        issue_comment_body = create_signature(
+            "mirrored",
             returned_data["html_url"],
-            generate_sentinel(returned_data["url"])
+            app.config["GITEA_INSTANCE_DOMAIN"],
+            returned_data["url"],
         )
 
         gitea.leave_comment_on_issue_by_number(
             repo_owner,
             repo_name,
             issue_number,
-            body,
+            issue_comment_body,
         )
 
     elif event_type == "created":
@@ -196,22 +183,13 @@ def gitea_handle_issue_action():
             app.config["GITEA_INSTANCE_DOMAIN"],
             comment_user,
         )
-        comment_header = "*This comment has automatically been created by [`gitea-github-sync`](https://{}/bridge/about) on behalf of [{}]({}).*".format(
-            app.config["GITEA_INSTANCE_DOMAIN"],
+        comment_footer = create_signature(
             comment_user,
             comment_user_url,
+            app.config["GITEA_INSTANCE_DOMAIN"],
+            event_url,
         )
-
-        comment_footer = """
-<details>
-    <summary>Internal issue metadata</summary>
-
-    {}
-</details>
-        """.format(generate_sentinel(event_url))
-
         comment_body = "\n\n".join([
-            comment_header,
             event_body,
             comment_footer,
         ])
@@ -274,22 +252,13 @@ def github_handle_issue_action():
         return ''
 
     if event_type == "opened":
-        issue_header = "*This issue has automatically been created by [`gitea-github-sync`](https://{}/bridge/about) on behalf of [{}]({}).*".format(
-            app.config["GITEA_INSTANCE_DOMAIN"],
+        issue_footer = create_signature(
             issue_user,
             issue_user_url,
+            app.config["GITEA_INSTANCE_DOMAIN"],
+            event_url,
         )
-
-        issue_footer = """
-<details>
-    <summary>Internal issue metadata</summary>
-
-    {}
-</details>
-        """.format(generate_sentinel(event_url))
-
         issue_body = "\n\n".join([
-            issue_header,
             event_body,
             issue_footer
         ])
@@ -306,26 +275,17 @@ def github_handle_issue_action():
         comment_user_url = "https://github.com/{}".format(
             comment_user,
         )
-        comment_header = "*This comment has automatically been created by [`gitea-github-sync`](https://{}/bridge/about) on behalf of [{}]({}).*".format(
-            app.config["GITEA_INSTANCE_DOMAIN"],
+        comment_footer = create_signature(
             comment_user,
             comment_user_url,
+            app.config["GITEA_INSTANCE_DOMAIN"],
+            event_url,
         )
 
-        comment_footer = """
-<details>
-    <summary>Internal issue metadata</summary>
-
-    {}
-</details>
-        """.format(generate_sentinel(event_url))
-
         comment_body = "\n\n".join([
-            comment_header,
             event_body,
             comment_footer,
         ])
-
 
         gitea.leave_comment_on_issue_by_number(
             repo_owner,
