@@ -47,41 +47,42 @@ def gitea_handle_repo_action():
     except KeyError:
         abort(400) # the data isn't formatted correctly
 
-    if not repo_action == "created":
+    if repo_action == "created":
+        new_repo = github.create_repo(
+            repo_name, repo_description
+        )
+        new_repo_url = new_repo.json()["html_url"]
+
+        gitea.add_push_target(
+            repo_owner, repo_name, new_repo_url, repo_owner,
+            app.config["GITHUB_ACCESS_TOKEN"]
+        )
+        gitea.force_push_target(
+            repo_owner,
+            repo_name
+        )
+
+        github.create_webhook(
+            repo_owner,
+            repo_name,
+            "https://{}/bridge/endpoints/github/issue".format(
+                app.config["GITEA_INSTANCE_DOMAIN"]
+            ),
+            ["issues", "issue_comment"]
+        )
+        gitea.create_webhook(
+            repo_owner,
+            repo_name,
+            "https://{}/bridge/endpoints/gitea/issue".format(
+                app.config["GITEA_INSTANCE_DOMAIN"]
+            ),
+            ["issues", "issue_comment"]
+        )
+
         return ''
+    elif repo_action == "deleted":
+        github.delete_repo(repo_owner, repo_name)
 
-    new_repo = github.create_repo(
-        repo_name, repo_description
-    )
-    new_repo_url = new_repo.json()["html_url"]
-
-    gitea.add_push_target(
-        repo_owner, repo_name, new_repo_url, repo_owner,
-        app.config["GITHUB_ACCESS_TOKEN"]
-    )
-    gitea.force_push_target(
-        repo_owner,
-        repo_name
-    )
-
-    github.create_webhook(
-        repo_owner,
-        repo_name,
-        "https://{}/bridge/endpoints/github/issue".format(
-            app.config["GITEA_INSTANCE_DOMAIN"]
-        ),
-        ["issues", "issue_comment"]
-    )
-    gitea.create_webhook(
-        repo_owner,
-        repo_name,
-        "https://{}/bridge/endpoints/gitea/issue".format(
-            app.config["GITEA_INSTANCE_DOMAIN"]
-        ),
-        ["issues", "issue_comment"]
-    )
-
-    return ''
 
 @app.route("/bridge/endpoints/gitea/issue", methods=["POST"])
 def gitea_handle_issue_action():

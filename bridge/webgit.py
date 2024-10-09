@@ -43,6 +43,9 @@ class WebgitClient:
     def patch(self, *args, **kwargs):
         return self._request_wrapper("PATCH", *args, **kwargs)
 
+    def delete(self, *args, **kwargs):
+        return self._request_wrapper("DELETE", *args, **kwargs)
+
     def create_repo(self, name, description):
         return self.post(
             self.api_prefix + "/user/repos",
@@ -102,6 +105,11 @@ class WebgitClient:
             json={
                 "state": "closed",
             },
+        )
+
+    def delete_repo(self, owner, repo_name):
+        return self.delete(
+            self.api_prefix + "/repos/{}/{}".format(owner, repo_name)
         )
 
 @dataclass
