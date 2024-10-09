@@ -4,7 +4,9 @@ from flask import redirect
 from flask import abort
 
 import requests
-import base64
+
+from .webgit import Gitea, Github
+from .utils import issue_sentinel, generate_sentinel
 
 app = Flask(__name__)
 app.config.from_envvar('GIT_BRIDGE_SETTINGS')
@@ -15,6 +17,19 @@ def index():
 
 @app.route("/bridge/endpoints/gitea/repo", methods=["POST"])
 def gitea_handle_repo_action():
+    """
+        Our plan of action for handling these events:
+        - ignore deleting repositories -- this is a potentially destructive operation
+          that *only* *the* *user* *should* *do*
+        - create a cooresponding repo on github
+        - create a push mirror to github so pushes to gitea get to github
+        - create webhooks for issues (and in the future, pull requests) on both
+          Gitea and Github ends
+    """
+
+    gitea = Gitea(app.config["GITEA_ACCESS_TOKEN"])
+    github = Github(app.config["GITHUB_ACCESS_TOKEN"])
+
     data = request.json
 
     try:
@@ -29,20 +44,10 @@ def gitea_handle_repo_action():
     except KeyError:
         abort(400) # the data isn't formatted correctly
 
-    """
-        Our plan of action for handling these events:
-        - ignore deleting repositories -- this is a potentially destructive operation
-          that *only* *the* *user* *should* *do*
-        - create a cooresponding repo on github
-        - create a push mirror to github so pushes to gitea get to github
-        - create webhooks for issues (and in the future, pull requests) on both
-          Gitea and Github ends
-    """
-
     if not repo_action == "created":
         return ''
 
-    github_created_repo_result = requests.post(
+    github_created_repo_result = github.post(
         "https://api.github.com/user/repos",
         json={
             "name": repo_name,
@@ -53,21 +58,11 @@ def gitea_handle_repo_action():
                 repo_name,
             ),
         },
-        headers={
-            "Accept": "application/vnd.github+json",
-            "Authorization": "token " + app.config["GITHUB_ACCESS_TOKEN"],
-            "X-GitHub-Api-Version": "2022-11-28",
-        },
     )
-
-    try:
-        github_created_repo_result.raise_for_status()
-    except requests.exceptions.HTTPError:
-        abort(500)
 
     new_github_repo_url = github_created_repo_result.json()["html_url"]
 
-    gitea_add_github_repo_url_result = requests.patch(
+    gitea_add_github_repo_url_result = gitea.patch(
         "https://{}/api/v1/repos/{}/{}".format(
             app.config["GITEA_INSTANCE_DOMAIN"],
             repo_owner,
@@ -76,17 +71,9 @@ def gitea_handle_repo_action():
         json={
             "website": new_github_repo_url,
         },
-        headers={
-            "Authorization": "token " + app.config["GITEA_ACCESS_TOKEN"],
-        },
     )
 
-    try:
-        gitea_add_github_repo_url_result.raise_for_status()
-    except requests.exceptions.HTTPError:
-        abort(500)
-
-    gitea_push_target_result = requests.post(
+    gitea_push_target_result = gitea.post(
         "https://{}/api/v1/repos/{}/{}/push_mirrors".format(
             app.config["GITEA_INSTANCE_DOMAIN"],
             repo_owner,
@@ -99,33 +86,17 @@ def gitea_handle_repo_action():
             "remote_username": repo_owner,
             "sync_on_commit": True,
         },
-        headers={
-            "Authorization": "token " + app.config["GITEA_ACCESS_TOKEN"],
-        },
     )
 
-    try:
-        gitea_push_target_result.raise_for_status()
-    except requests.exceptions.HTTPError:
-        abort(500)
-
-    gitea_force_target_push = requests.post(
+    gitea_force_target_push = gitea.post(
         "https://{}/api/v1/repos/{}/{}/push_mirrors-sync".format(
             app.config["GITEA_INSTANCE_DOMAIN"],
             repo_owner,
             repo_name
         ),
-        headers={
-            "Authorization": "token " + app.config["GITEA_ACCESS_TOKEN"],
-        },
     )
 
-    try:
-        gitea_force_target_push.raise_for_status()
-    except requests.exceptions.HTTPError:
-        abort(500)
-
-    github_create_webhook_result = requests.post(
+    github_create_webhook_result = github.post(
         "https://api.github.com/repos/{}/{}/hooks".format(
             repo_owner,
             repo_name,
@@ -142,19 +113,9 @@ def gitea_handle_repo_action():
                 "issues", "issue_comment",
             ],
         },
-        headers={
-            "Accept": "application/vnd.github+json",
-            "Authorization": "token " + app.config["GITHUB_ACCESS_TOKEN"],
-            "X-GitHub-Api-Version": "2022-11-28",
-        },
     )
 
-    try:
-        github_create_webhook_result.raise_for_status()
-    except requests.exceptions.HTTPError:
-        abort(500)
-
-    gitea_create_webhook_result = requests.post(
+    gitea_create_webhook_result = gitea.post(
         "https://{}/api/v1/repos/{}/{}/hooks".format(
             app.config["GITEA_INSTANCE_DOMAIN"],
             repo_owner,
@@ -174,20 +135,31 @@ def gitea_handle_repo_action():
                 "issues", "issue_comment",
             ],
         },
-        headers={
-            "Authorization": "token " + app.config["GITEA_ACCESS_TOKEN"],
-        },
     )
-    
-    try:
-        gitea_create_webhook_result.raise_for_status()
-    except requests.exceptions.HTTPError:
-        abort(500)
 
     return ''
 
 @app.route("/bridge/endpoints/gitea/issue", methods=["POST"])
 def gitea_handle_issue_action():
+    """
+        firstly, check if the sentinal is in the issue body
+            - if it is, then stop processing the event
+              (we don't want infinite loops)
+        if we've opened an issue:
+            - create a new one on the Github side
+            - make it relate to the Gitea one
+            - make the Gitea one related to the Github one
+        
+        if we've commented:
+            - add a comment to the cooresponding Github issue
+
+        if we've closed:
+            - add a cooresponding comment and close the Github issue
+    """
+
+    gitea = Gitea(app.config["GITEA_ACCESS_TOKEN"])
+    github = Github(app.config["GITHUB_ACCESS_TOKEN"])
+
     data = request.json
 
     try:
@@ -218,23 +190,7 @@ def gitea_handle_issue_action():
         print(e, type(e))
         abort(400) # the data isn't formatted correctly
 
-    """
-        firstly, check if the sentinal is in the issue body
-            - if it is, then stop processing the event
-              (we don't want infinite loops)
-        if we've opened an issue:
-            - create a new one on the Github side
-            - make it relate to the Gitea one
-            - make the Gitea one related to the Github one
-        
-        if we've commented:
-            - add a comment to the cooresponding Github issue
-
-        if we've closed:
-            - add a cooresponding comment and close the Github issue
-    """
-
-    if "GITEA_GITHUB_ISSUE_SYNC_SENTINAL" in event_body:
+    if issue_sentinel in event_body:
         return ''
 
     if event_type == "opened":
@@ -248,9 +204,9 @@ def gitea_handle_issue_action():
 <details>
     <summary>Internal issue metadata</summary>
 
-    GITEA_GITHUB_ISSUE_SYNC_SENTINAL {}
+    {}
 </details>
-        """.format(base64.b64encode(event_url.encode("utf-8")).decode("utf-8"))
+        """.format(generate_sentinel(event_url))
 
         issue_body = "\n\n".join([
             issue_header,
@@ -258,7 +214,7 @@ def gitea_handle_issue_action():
             issue_footer
         ])
         
-        github_create_issue_result = requests.post(
+        github_create_issue_result = github.post(
             "https://api.github.com/repos/{}/{}/issues".format(
                 repo_owner,
                 repo_name,
@@ -267,18 +223,8 @@ def gitea_handle_issue_action():
                 "title": event_title,
                 "body": issue_body,
             },
-            headers={
-                "Accept": "application/vnd.github+json",
-                "Authorization": "token " + app.config["GITHUB_ACCESS_TOKEN"],
-                "X-GitHub-Api-Version": "2022-11-28",
-            },
         )
         
-        try:
-            github_create_issue_result.raise_for_status()
-        except requests.exceptions.HTTPError:
-            abort(500)
-
         returned_data = github_create_issue_result.json()
         issue_comment_body = """
 *This issue is being mirrored on Github [here]({}).*
@@ -286,14 +232,14 @@ def gitea_handle_issue_action():
 <details>
     <summary>Internal issue metadata</summary>
 
-    GITEA_GITHUB_ISSUE_SYNC_SENTINEL {}
+    {}
 </details>
         """.format(
             returned_data["html_url"],
-            base64.b64encode(returned_data["url"].encode("utf-8")).decode("utf-8")
+            generate_sentinel(returned_data["url"])
         )
 
-        gitea_issue_comment_result = requests.post(
+        gitea_issue_comment_result = gitea.post(
             "https://{}/api/v1/repos/{}/{}/issues/{}/comments".format(
                 app.config["GITEA_INSTANCE_DOMAIN"],
                 repo_owner,
@@ -303,14 +249,6 @@ def gitea_handle_issue_action():
             json={
                 "body": issue_comment_body,
             },
-            headers={
-                "Authorization": "token " + app.config["GITEA_ACCESS_TOKEN"],
-            },
         )
-
-        try:
-            gitea_issue_comment_result.raise_for_status()
-        except requests.exceptions.HTTPError:
-            abort(500)
 
         return ''
