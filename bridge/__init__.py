@@ -50,23 +50,21 @@ def gitea_handle_repo_action():
     if not repo_action == "created":
         return ''
 
-    github_created_repo_result = github.create_repo(
+    new_repo = github.create_repo(
         repo_name, repo_description
     )
+    new_repo_url = new_repo.json()["html_url"]
 
-    new_github_repo_url = github_created_repo_result.json()["html_url"]
-
-    gitea_push_target_result = gitea.add_push_target(
-        repo_owner, repo_name, new_github_repo_url, repo_owner,
+    gitea.add_push_target(
+        repo_owner, repo_name, new_repo_url, repo_owner,
         app.config["GITHUB_ACCESS_TOKEN"]
     )
-
-    gitea_force_target_push = gitea.force_push_target(
+    gitea.force_push_target(
         repo_owner,
         repo_name
     )
 
-    github_create_webhook_result = github.create_webhook(
+    github.create_webhook(
         repo_owner,
         repo_name,
         "https://{}/bridge/endpoints/github/issue".format(
@@ -74,8 +72,7 @@ def gitea_handle_repo_action():
         ),
         ["issues", "issue_comment"]
     )
-
-    gitea_create_webhook_result = gitea.create_webhook(
+    gitea.create_webhook(
         repo_owner,
         repo_name,
         "https://{}/bridge/endpoints/gitea/issue".format(
@@ -164,14 +161,13 @@ def gitea_handle_issue_action():
             issue_footer
         ])
         
-        github_create_issue_result = github.create_issue(
+        new_issue = github.create_issue(
             repo_owner,
             repo_name,
             event_title,
             issue_body,
         )
-        
-        returned_data = github_create_issue_result.json()
+        returned_data = new_issue.json()
         issue_comment_body = """
 *This issue is being mirrored on Github [here]({}).*
 
@@ -185,7 +181,7 @@ def gitea_handle_issue_action():
             generate_sentinel(returned_data["url"])
         )
 
-        gitea_issue_comment_result = gitea.leave_comment_on_issue_by_number(
+        gitea.leave_comment_on_issue_by_number(
             repo_owner,
             repo_name,
             issue_number,
@@ -218,7 +214,7 @@ def gitea_handle_issue_action():
             comment_footer,
         ])
 
-        github_comment_post_result = github.leave_comment_on_issue_by_number(
+        github.leave_comment_on_issue_by_number(
             repo_owner,
             repo_name,
             issue_number,
@@ -296,7 +292,7 @@ def github_handle_issue_action():
             issue_footer
         ])
 
-        gitea_create_issue_result = gitea.create_issue(
+        gitea.create_issue(
             repo_owner,
             repo_name,
             event_title,
@@ -329,7 +325,7 @@ def github_handle_issue_action():
         ])
 
 
-        gitea_comment_post_result = gitea.leave_comment_on_issue_by_number(
+        gitea.leave_comment_on_issue_by_number(
             repo_owner,
             repo_name,
             issue_number,
@@ -337,7 +333,7 @@ def github_handle_issue_action():
         )
         
     elif event_type == "closed":
-        gitea_close_issue_result = gitea.close_issue_by_number(
+        gitea.close_issue_by_number(
             repo_owner,
             repo_name,
             issue_number,
