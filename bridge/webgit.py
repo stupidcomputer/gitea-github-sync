@@ -183,11 +183,11 @@ class Gitea(WebgitClient):
                 repo_name,
             ),
             json={
+                "active": True,
                 "config": {
                     "url": http_endpoint,
                     "content_type": "json",
                 },
-                "active": True,
                 "events": events,
                 "type": "gitea",
             },

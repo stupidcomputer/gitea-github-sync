@@ -79,9 +79,10 @@ def gitea_handle_repo_action():
             ["issues", "issue_comment"]
         )
 
-        return ''
     elif repo_action == "deleted":
         github.delete_repo(repo_owner, repo_name)
+
+    return ''
 
 
 @app.route("/bridge/endpoints/gitea/issue", methods=["POST"])
@@ -219,11 +220,11 @@ def gitea_handle_issue_action():
             repo_owner,
             repo_name,
             issue_number,
-            body,
+            comment_body,
         )
     
     elif event_type == "closed":
-        github_close_issue_result = github.close_issue_by_number(
+        github.close_issue_by_number(
             repo_owner,
             repo_name,
             issue_number,
