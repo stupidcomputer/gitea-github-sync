@@ -27,7 +27,10 @@ def gitea_handle_repo_action():
           Gitea and Github ends
     """
 
-    gitea = Gitea(app.config["GITEA_ACCESS_TOKEN"])
+    gitea = Gitea(
+        api_token=app.config["GITEA_ACCESS_TOKEN"],
+        instance_name=app.config["GITEA_INSTANCE_DOMAIN"]
+    )
     github = Github(app.config["GITHUB_ACCESS_TOKEN"])
 
     data = request.json
@@ -47,94 +50,38 @@ def gitea_handle_repo_action():
     if not repo_action == "created":
         return ''
 
-    github_created_repo_result = github.post(
-        "https://api.github.com/user/repos",
-        json={
-            "name": repo_name,
-            "description": repo_description,
-            "homepage": "https://{}/{}/{}".format(
-                app.config["GITEA_INSTANCE_DOMAIN"],
-                repo_owner,
-                repo_name,
-            ),
-        },
+    github_created_repo_result = github.create_repo(
+        repo_name, repo_description
     )
 
     new_github_repo_url = github_created_repo_result.json()["html_url"]
 
-    gitea_add_github_repo_url_result = gitea.patch(
-        "https://{}/api/v1/repos/{}/{}".format(
-            app.config["GITEA_INSTANCE_DOMAIN"],
-            repo_owner,
-            repo_name,
-        ),
-        json={
-            "website": new_github_repo_url,
-        },
+    gitea_push_target_result = gitea.add_push_target(
+        repo_owner, repo_name, new_github_repo_url, repo_owner,
+        app.config["GITHUB_ACCESS_TOKEN"]
     )
 
-    gitea_push_target_result = gitea.post(
-        "https://{}/api/v1/repos/{}/{}/push_mirrors".format(
-            app.config["GITEA_INSTANCE_DOMAIN"],
-            repo_owner,
-            repo_name
-        ),
-        json={
-            "interval": "8h0m0s",
-            "remote_address": new_github_repo_url,
-            "remote_password": app.config["GITHUB_ACCESS_TOKEN"],
-            "remote_username": repo_owner,
-            "sync_on_commit": True,
-        },
+    gitea_force_target_push = gitea.force_push_target(
+        repo_owner,
+        repo_name
     )
 
-    gitea_force_target_push = gitea.post(
-        "https://{}/api/v1/repos/{}/{}/push_mirrors-sync".format(
-            app.config["GITEA_INSTANCE_DOMAIN"],
-            repo_owner,
-            repo_name
+    github_create_webhook_result = github.create_webhook(
+        repo_owner,
+        repo_name,
+        "https://{}/bridge/endpoints/github/issue".format(
+            app.config["GITEA_INSTANCE_DOMAIN"]
         ),
+        ["issues", "issue_comment"]
     )
 
-    github_create_webhook_result = github.post(
-        "https://api.github.com/repos/{}/{}/hooks".format(
-            repo_owner,
-            repo_name,
+    gitea_create_webhook_result = gitea.create_webhook(
+        repo_owner,
+        repo_name,
+        "https://{}/bridge/endpoints/gitea/issue".format(
+            app.config["GITEA_INSTANCE_DOMAIN"]
         ),
-        json={
-            "name": "web",
-            "config": {
-                "url": "https://{}/bridge/endpoints/github/issue".format(
-                    app.config["GITEA_INSTANCE_DOMAIN"]
-                ),
-                "content_type": "json",
-            },
-            "events": [
-                "issues", "issue_comment",
-            ],
-        },
-    )
-
-    gitea_create_webhook_result = gitea.post(
-        "https://{}/api/v1/repos/{}/{}/hooks".format(
-            app.config["GITEA_INSTANCE_DOMAIN"],
-            repo_owner,
-            repo_name,
-        ),
-        json={
-            "active": True,
-            "type": "gitea",
-            "config": {
-                "content_type": "json",
-                "url": "https://{}/bridge/endpoints/gitea/issue".format(
-                    app.config["GITEA_INSTANCE_DOMAIN"],
-                ),
-                "http_method": "post",
-            },
-            "events": [
-                "issues", "issue_comment",
-            ],
-        },
+        ["issues", "issue_comment"]
     )
 
     return ''
@@ -157,7 +104,10 @@ def gitea_handle_issue_action():
             - add a cooresponding comment and close the Github issue
     """
 
-    gitea = Gitea(app.config["GITEA_ACCESS_TOKEN"])
+    gitea = Gitea(
+        api_token=app.config["GITEA_ACCESS_TOKEN"],
+        instance_name=app.config["GITEA_INSTANCE_DOMAIN"]
+    )
     github = Github(app.config["GITHUB_ACCESS_TOKEN"])
 
     data = request.json
@@ -214,15 +164,11 @@ def gitea_handle_issue_action():
             issue_footer
         ])
         
-        github_create_issue_result = github.post(
-            "https://api.github.com/repos/{}/{}/issues".format(
-                repo_owner,
-                repo_name,
-            ),
-            json={
-                "title": event_title,
-                "body": issue_body,
-            },
+        github_create_issue_result = github.create_issue(
+            repo_owner,
+            repo_name,
+            event_title,
+            issue_body,
         )
         
         returned_data = github_create_issue_result.json()
@@ -239,16 +185,11 @@ def gitea_handle_issue_action():
             generate_sentinel(returned_data["url"])
         )
 
-        gitea_issue_comment_result = gitea.post(
-            "https://{}/api/v1/repos/{}/{}/issues/{}/comments".format(
-                app.config["GITEA_INSTANCE_DOMAIN"],
-                repo_owner,
-                repo_name,
-                issue_number,
-            ),
-            json={
-                "body": issue_comment_body,
-            },
+        gitea_issue_comment_result = gitea.leave_comment_on_issue_by_number(
+            repo_owner,
+            repo_name,
+            issue_number,
+            body,
         )
 
     elif event_type == "created":
@@ -277,27 +218,129 @@ def gitea_handle_issue_action():
             comment_footer,
         ])
 
-        github_comment_post_result = github.post(
-            "https://api.github.com/repos/{}/{}/issues/{}/comments".format(
-                repo_owner,
-                repo_name,
-                issue_number,
-            ),
-            json={
-                "body": comment_body,
-            },
+        github_comment_post_result = github.leave_comment_on_issue_by_number(
+            repo_owner,
+            repo_name,
+            issue_number,
+            body,
         )
     
     elif event_type == "closed":
-        github_close_issue_result = github.patch(
-            "https://api.github.com/repos/{}/{}/issues/{}".format(
-                repo_owner,
-                repo_name,
-                issue_number,
-            ),
-            json={
-                "state": "closed",
-            },
+        github_close_issue_result = github.close_issue_by_number(
+            repo_owner,
+            repo_name,
+            issue_number,
+        )
+    
+    return ''
+
+@app.route("/bridge/endpoints/github/issue", methods=["POST"])
+def github_handle_issue_action():
+    gitea = Gitea(
+        api_token=app.config["GITEA_ACCESS_TOKEN"],
+        instance_name=app.config["GITEA_INSTANCE_DOMAIN"]
+    )
+    github = Github(app.config["GITHUB_ACCESS_TOKEN"])
+
+    data = request.json
+
+    try:
+        event_type = data["action"]
+
+        repo_owner = data["repository"]["owner"]["login"]
+        repo_name = data["repository"]["name"]
+        issue_user = data["issue"]["user"]["login"]
+        issue_user_url = "https://github.com/{}".format(
+            issue_user,
+        )
+        issue_number = data["issue"]["number"]
+
+        if event_type == "opened": # new issue created
+            event_title = data["issue"]["title"]
+            event_body = data["issue"]["body"]
+        elif event_type == "created": # new comment on that issue
+            event_title = None
+            event_body = data["comment"]["body"]
+        elif event_type == "closed": # issue closed
+            event_title = None
+            event_body = data["issue"]["body"]
+
+        if not event_body: event_body = ""
+        event_url = data["issue"]["url"]
+
+    except KeyError as e:
+        print(e, type(e))
+        abort(400) # the data isn't formatted correctly
+
+    if issue_sentinel in event_body:
+        return ''
+
+    if event_type == "opened":
+        issue_header = "*This issue has automatically been created by [`gitea-github-sync`](https://{}/bridge/about) on behalf of [{}]({}).*".format(
+            app.config["GITEA_INSTANCE_DOMAIN"],
+            issue_user,
+            issue_user_url,
+        )
+
+        issue_footer = """
+<details>
+    <summary>Internal issue metadata</summary>
+
+    {}
+</details>
+        """.format(generate_sentinel(event_url))
+
+        issue_body = "\n\n".join([
+            issue_header,
+            event_body,
+            issue_footer
+        ])
+
+        gitea_create_issue_result = gitea.create_issue(
+            repo_owner,
+            repo_name,
+            event_title,
+            issue_body
+        )
+
+    elif event_type == "created":
+        comment_user = data["comment"]["user"]["login"]
+        comment_user_url = "https://github.com/{}".format(
+            comment_user,
+        )
+        comment_header = "*This comment has automatically been created by [`gitea-github-sync`](https://{}/bridge/about) on behalf of [{}]({}).*".format(
+            app.config["GITEA_INSTANCE_DOMAIN"],
+            comment_user,
+            comment_user_url,
+        )
+
+        comment_footer = """
+<details>
+    <summary>Internal issue metadata</summary>
+
+    {}
+</details>
+        """.format(generate_sentinel(event_url))
+
+        comment_body = "\n\n".join([
+            comment_header,
+            event_body,
+            comment_footer,
+        ])
+
+
+        gitea_comment_post_result = gitea.leave_comment_on_issue_by_number(
+            repo_owner,
+            repo_name,
+            issue_number,
+            comment_body
+        )
+        
+    elif event_type == "closed":
+        gitea_close_issue_result = gitea.close_issue_by_number(
+            repo_owner,
+            repo_name,
+            issue_number,
         )
     
     return ''
