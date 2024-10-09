@@ -251,4 +251,53 @@ def gitea_handle_issue_action():
             },
         )
 
-        return ''
+    elif event_type == "created":
+        comment_user = data["comment"]["user"]["login"]
+        comment_user_url = "https://{}/{}".format(
+            app.config["GITEA_INSTANCE_DOMAIN"],
+            comment_user,
+        )
+        comment_header = "*This comment has automatically been created by [`gitea-github-sync`](https://{}/bridge/about) on behalf of [{}]({}).*".format(
+            app.config["GITEA_INSTANCE_DOMAIN"],
+            comment_user,
+            comment_user_url,
+        )
+
+        comment_footer = """
+<details>
+    <summary>Internal issue metadata</summary>
+
+    {}
+</details>
+        """.format(generate_sentinel(event_url))
+
+        comment_body = "\n\n".join([
+            comment_header,
+            event_body,
+            comment_footer,
+        ])
+
+        github_comment_post_result = github.post(
+            "https://api.github.com/repos/{}/{}/issues/{}/comment".format(
+                repo_owner,
+                repo_name,
+                issue_number,
+            ),
+            json={
+                "body": comment_body,
+            },
+        )
+    
+    elif event_type == "closed":
+        github_close_issue_result = github.patch(
+            "https://api.github.com/repos/{}/{}/issues/{}".format(
+                repo_owner,
+                repo_name,
+                issue_number,
+            ),
+            json={
+                "state": "closed",
+            },
+        )
+    
+    return ''
