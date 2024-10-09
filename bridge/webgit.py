@@ -187,6 +187,7 @@ class Gitea(WebgitClient):
                     "url": http_endpoint,
                     "content_type": "json",
                 },
+                "active": True,
                 "events": events,
                 "type": "gitea",
             },
