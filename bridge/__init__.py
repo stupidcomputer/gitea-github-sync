@@ -261,11 +261,26 @@ def github_handle_issue_action():
             issue_footer
         ])
 
-        gitea.create_issue(
+        new_issue = gitea.create_issue(
             repo_owner,
             repo_name,
             event_title,
             issue_body
+        )
+        
+        returned_data = new_issue.json()
+        issue_comment_body = create_signature(
+            "mirrored",
+            returned_data["html_url"],
+            app.config["GITEA_INSTANCE_DOMAIN"],
+            returned_data["url"],
+        )
+
+        github.leave_comment_on_issue_by_number(
+            repo_owner,
+            repo_name,
+            issue_number,
+            issue_comment_body,
         )
 
     elif event_type == "created" and not issue_sentinel_present:
