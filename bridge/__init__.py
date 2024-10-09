@@ -139,10 +139,9 @@ def gitea_handle_issue_action():
         print(e, type(e))
         abort(400) # the data isn't formatted correctly
 
-    if issue_sentinel in event_body:
-        return ''
+    issue_sentinel_present = issue_sentinel in event_body
 
-    if event_type == "opened":
+    if event_type == "opened" and not issue_sentinel_present:
         issue_footer = create_signature(
             issue_user,
             issue_user_url,
@@ -177,7 +176,7 @@ def gitea_handle_issue_action():
             issue_comment_body,
         )
 
-    elif event_type == "created":
+    elif event_type == "created" and not issue_sentinel_present:
         comment_user = data["comment"]["user"]["login"]
         comment_user_url = "https://{}/{}".format(
             app.config["GITEA_INSTANCE_DOMAIN"],
@@ -248,10 +247,9 @@ def github_handle_issue_action():
         print(e, type(e))
         abort(400) # the data isn't formatted correctly
 
-    if issue_sentinel in event_body:
-        return ''
+    issue_sentinel_present = issue_sentinel in event_body
 
-    if event_type == "opened":
+    if event_type == "opened" and not issue_sentinel_present:
         issue_footer = create_signature(
             issue_user,
             issue_user_url,
@@ -270,7 +268,7 @@ def github_handle_issue_action():
             issue_body
         )
 
-    elif event_type == "created":
+    elif event_type == "created" and not issue_sentinel_present:
         comment_user = data["comment"]["user"]["login"]
         comment_user_url = "https://github.com/{}".format(
             comment_user,
