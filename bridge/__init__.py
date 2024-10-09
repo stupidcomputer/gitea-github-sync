@@ -278,7 +278,7 @@ def gitea_handle_issue_action():
         ])
 
         github_comment_post_result = github.post(
-            "https://api.github.com/repos/{}/{}/issues/{}/comment".format(
+            "https://api.github.com/repos/{}/{}/issues/{}/comments".format(
                 repo_owner,
                 repo_name,
                 issue_number,
